@@ -45,6 +45,22 @@ public static class ZoneService
                 Source = remainPolygon
             });
             
+            //Debug
+            Console.WriteLine($"Source");
+            Console.WriteLine(polygonContainerResult.Source.GetInfoEdges());
+            Console.WriteLine("Source priority edge");
+            Console.WriteLine(polygonContainerResult.Source.PriorityEdge);
+            Console.WriteLine($"Variant: CX {variant.Cx} CY {variant.Cy} ZoneCount: {variant.ZoneCount}");
+            Console.WriteLine();
+            result.ToList().ForEach(x => Console.WriteLine(x.GetInfoEdges()));
+            Console.WriteLine("Remain");
+            Console.WriteLine(remainPolygon.GetInfoEdges());
+            if (result.Any(x => x.Edges.Length != 4) || remainPolygon.Edges.Length != 4)
+            {
+                Console.WriteLine("Error");
+            }
+            //Debug
+            
             var innerPolygonContainerResult = polygonContainerResult.InnerResult.First(x => x.Variant == variant);
             Processing(innerPolygonContainerResult, assignment);
         }
