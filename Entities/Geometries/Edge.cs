@@ -37,4 +37,9 @@ public class Edge
     /// Тангенс угла
     /// </summary>
     public float Tan => (float)((End.Y - Start.Y) / (End.X - Start.X));
+
+    public override string ToString()
+    {
+        return $"{Start} - {End}";
+    }
 }
