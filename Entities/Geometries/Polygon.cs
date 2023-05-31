@@ -3,10 +3,11 @@
 public class Polygon //todo ctor + save
 {
     private const double Epsilon = 0.001;
+
     public Polygon()
     {
-        
     }
+
     public Polygon(Edge[] edges, PolygonType type = PolygonType.Abstract)
     {
         CheckAndConstructEdges(edges);
@@ -46,7 +47,8 @@ public class Polygon //todo ctor + save
         var nextIndex = 1;
         while (currentIndex < edgeList.Count - 1)
         {
-            if (Math.Abs(edgeList[currentIndex].Sin - edgeList[nextIndex].Sin) < Epsilon)
+            if (Math.Abs(edgeList[currentIndex].Sin - edgeList[nextIndex].Sin) < Epsilon &&
+                Math.Sign(edgeList[currentIndex].Cos) == Math.Sign(edgeList[nextIndex].Cos))
             {
                 edgeList[currentIndex].End = edgeList[nextIndex].End;
                 edgeList.RemoveAt(nextIndex);
