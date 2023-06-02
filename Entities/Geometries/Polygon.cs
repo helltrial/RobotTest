@@ -21,6 +21,7 @@ public class Polygon //todo ctor + save
 
     /// <summary>
     /// Ориентация полигона по часовой/против часовой стрелки
+    /// true - по часовой
     /// ref: https://shorturl.at/cfDVZ
     /// </summary>
     public bool IsClockwise => Edges.Sum(edge => edge.Start.X * edge.End.Y - edge.End.X * edge.Start.Y) <= 0;
@@ -58,6 +59,13 @@ public class Polygon //todo ctor + save
                 currentIndex++;
                 nextIndex++;
             }
+        }
+
+        if (Math.Abs(edgeList[0].Sin - edgeList[^1].Sin) < Epsilon &&
+            Math.Sign(edgeList[0].Cos) == Math.Sign(edgeList[^1].Cos))
+        {
+            edgeList[^1].End = edgeList[0].End;
+            edgeList.RemoveAt(0);
         }
 
         Edges = edgeList.ToArray();

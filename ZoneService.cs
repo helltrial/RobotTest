@@ -1,5 +1,4 @@
-﻿using System.Text;
-using Clipper2Lib;
+﻿using Clipper2Lib;
 using RobotTest.Entities.Assignments;
 using RobotTest.Entities.Geometries;
 
@@ -7,6 +6,8 @@ namespace RobotTest;
 
 public static class ZoneService
 {
+    private static float DiscriminantEpsilon = 0.01F;
+
     public static void Processing(PolygonContainerResult polygonContainerResult, Assignment assignment)
     {
         var variants = assignment.GetVariants(polygonContainerResult.Source.PriorityEdge);
@@ -16,23 +17,24 @@ public static class ZoneService
         {
             polygonContainerResult.InnerResult.Add(new PolygonContainerResult
             {
-                Result = new[] { polygonContainerResult.Source }
+                Result = new[] { polygonContainerResult.Source },
+                Parent = polygonContainerResult
             });
             return;
         }
 
         foreach (var variant in variants)
         {
-            var result = GetPolygons(polygonContainerResult.Source, variant);
+            var (remainPolygon, result) = GetPolygons(polygonContainerResult.Source, variant);
             SetAttributesFromSourcePolygon(polygonContainerResult.Source, result);
 
-            var remainPolygon = GetRemainPolygon(polygonContainerResult.Source, result);
             if (remainPolygon.IsEmpty)
             {
                 polygonContainerResult.InnerResult.Add(new PolygonContainerResult
                 {
                     Result = result,
-                    Variant = variant
+                    Variant = variant,
+                    Parent = polygonContainerResult
                 });
                 return;
             }
@@ -42,9 +44,10 @@ public static class ZoneService
             {
                 Result = result,
                 Variant = variant,
-                Source = remainPolygon
+                Source = remainPolygon,
+                Parent = polygonContainerResult
             });
-            
+
             var innerPolygonContainerResult = polygonContainerResult.InnerResult.First(x => x.Variant == variant);
             Processing(innerPolygonContainerResult, assignment);
         }
@@ -60,6 +63,7 @@ public static class ZoneService
             {
                 foreach (var sourceEdge in sourcePolygon.Edges)
                 {
+                    // Совпадают обе вершины
                     if (targetEdge.Start.Equals(sourceEdge.Start) && targetEdge.End.Equals(sourceEdge.End) ||
                         targetEdge.End.Equals(sourceEdge.Start) && targetEdge.Start.Equals(sourceEdge.End))
                     {
@@ -71,24 +75,42 @@ public static class ZoneService
                     if ((targetEdge.Start.Equals(sourceEdge.Start) ||
                          targetEdge.Start.Equals(sourceEdge.End) ||
                          targetEdge.End.Equals(sourceEdge.Start) ||
-                         targetEdge.End.Equals(sourceEdge.End)) &&
-                        Math.Abs(targetEdge.Sin) == Math.Abs(sourceEdge.Sin))
+                         targetEdge.End.Equals(sourceEdge.End)))
                     {
-                        targetEdge.UdsPriority = sourceEdge.UdsPriority;
-                        targetEdge.UdsType = sourceEdge.UdsType;
-                        break;
+                        if (IsEdgesAreCollinear(sourceEdge, targetEdge))
+                        {
+                            targetEdge.UdsPriority = sourceEdge.UdsPriority;
+                            targetEdge.UdsType = sourceEdge.UdsType;
+                            break;
+                        }
                     }
                 }
 
                 if (targetEdge.UdsPriority == 0)
                 {
-                    targetEdge.UdsPriority = newUdsPriority;
                     newUdsPriority++;
+                    targetEdge.UdsPriority = newUdsPriority;
                 }
             }
 
             newUdsPriority = sourceMaxUdsPriority;
         }
+    }
+
+    private static bool IsEdgesAreCollinear(Edge sourceEdge, Edge targetEdge)
+    {
+        var dxSource = sourceEdge.End.X - sourceEdge.Start.X;
+        var dySource = sourceEdge.End.Y - sourceEdge.Start.Y;
+
+        var dxTarget = targetEdge.End.X - targetEdge.Start.X;
+        var dyTarget = targetEdge.End.Y - targetEdge.Start.Y;
+
+        var discriminant = (dxSource * dyTarget - dySource * dxTarget);
+
+        var temp = Math.Abs(discriminant) / 1000;
+
+        // 100 - делитель, решающий ошибки округления
+        return temp <= DiscriminantEpsilon;
     }
 
     private static bool IsPolygonCanBeZoned(Polygon sourcePolygon, List<AssignmentVariant> variants)
@@ -108,7 +130,7 @@ public static class ZoneService
         var unionPolygon = new PathsD();
         foreach (var processedPolygon in processedPolygons)
         {
-            var pathsD = new PathsD { Clipper.MakePath(processedPolygon.PointsArray) };
+            var pathsD = processedPolygon.GetPathsDFromPolygon();
             if (!unionPolygon.Any())
             {
                 unionPolygon = pathsD;
@@ -119,18 +141,25 @@ public static class ZoneService
                     new PathsD { Clipper.MakePath(processedPolygon.PointsArray) }, FillRule.NonZero);
             }
         }
-        
-        var dif = Clipper.Difference(new PathsD { Clipper.MakePath(sourcePolygon.PointsArray) }, unionPolygon,
+
+        var dif = Clipper.Difference(sourcePolygon.GetPathsDFromPolygon(), unionPolygon,
             FillRule.NonZero);
         return dif.GetPolygonFromPathsD();
     }
 
-    private static Polygon[] GetPolygons(Polygon polygon, AssignmentVariant variant)
+    /// <summary>
+    /// Возвращает результат выполнения нарезки по варианту
+    /// </summary>
+    /// <param name="polygon">Исходный полигон</param>
+    /// <param name="variant">Вариант нарезки</param>
+    /// <returns>Кортеж, где первым указан новый результирующий полигон, а вторым - массив результирующий полигонов, обработанных по варинту нарезки</returns>
+    private static (Polygon, Polygon[]) GetPolygons(Polygon polygon, AssignmentVariant variant)
     {
         var currentEdge = polygon.PriorityEdge;
         var points = GetPointsOnEdge(currentEdge, variant);
 
         var result = new Polygon[points.Count - 1];
+        var rectangles = new Polygon[points.Count - 1];
         for (var index = 0; index < points.Count - 1; index++)
         {
             var edge = new Edge
@@ -141,11 +170,16 @@ public static class ZoneService
                 UdsType = currentEdge.UdsType
             };
             var length = edge.DirectionType == EdgeDirectionType.Cx ? variant.Cy : variant.Cx;
-            var rectangle = GetRectangle(edge, length, polygon.IsClockwise);
-            result[index] = GetPolygonFromRectangle(polygon, rectangle);
+            var rectangleForIntersection = GetRectangle(edge, length, polygon.IsClockwise);
+
+            result[index] = GetPolygonFromRectangle(polygon, rectangleForIntersection);
+
+            rectangles[index] = GetRectangle(edge, length, polygon.IsClockwise, true);
         }
 
-        return result;
+        var remainPolygon = GetRemainPolygon(polygon, rectangles);
+
+        return (remainPolygon, result);
     }
 
     private static Polygon GetPolygonFromRectangle(Polygon source, Polygon target)
@@ -158,17 +192,24 @@ public static class ZoneService
         return intersection.GetPolygonFromPathsD();
     }
 
-    private static Polygon GetRectangle(Edge edge, float length, bool isClockwisePolygon)
+    private static Polygon GetRectangle(Edge edge, float length, bool isClockwisePolygon, bool isOffset = false)
     {
+        var startPoint = isOffset ? GetPerpendicularPoint(edge.Start, edge, length, !isClockwisePolygon) : edge.Start;
+        var endPoint = isOffset ? GetPerpendicularPoint(edge.End, edge, length, !isClockwisePolygon) : edge.End;
+
         var pointStartPerpendicular = GetPerpendicularPoint(edge.Start, edge, length, isClockwisePolygon);
         var pointEndPerpendicular = GetPerpendicularPoint(edge.End, edge, length, isClockwisePolygon);
 
         var edges = new[]
         {
-            edge,
             new Edge
             {
-                Start = edge.End,
+                Start = startPoint,
+                End = endPoint
+            },
+            new Edge
+            {
+                Start = endPoint,
                 End = pointEndPerpendicular
             },
             new Edge
@@ -179,7 +220,7 @@ public static class ZoneService
             new Edge
             {
                 Start = pointStartPerpendicular,
-                End = edge.Start
+                End = startPoint
             }
         };
 

@@ -57,11 +57,14 @@ public static class Program
         var jsonStr = await streamReader.ReadToEndAsync();
         var model = JsonConvert.DeserializeObject<ModuleDataDto>(jsonStr);
 
-        var assignment = MockAssignmentBuilder.GetAssignment(model);
-        var polygon = MockPolygonBuilder.GetPolygon(model);
+        var assignment = AssignmentBuilder.GetAssignment(model);
+        var polygon = PolygonBuilder.GetPolygon(model);
+
+        var containerResult = new PolygonContainerResult { Source = polygon };
+        ZoneService.Processing(containerResult, assignment);
+
+        var result = ZoneOutputService.GetResult(containerResult);
         
-        var result = new PolygonContainerResult { Source = polygon };
-        ZoneService.Processing(result, assignment);
         
     }
 }

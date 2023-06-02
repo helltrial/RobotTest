@@ -6,7 +6,7 @@ namespace RobotTest;
 
 public static class DebugExtensions
 {
-    public static string GetInfo(this Polygon polygon)
+    public static string GetQGISInfo(this Polygon polygon)
     {
         var stringBuilder = new StringBuilder();
         stringBuilder.Append(
@@ -34,5 +34,41 @@ public static class DebugExtensions
         }
 
         return stringBuilder.ToString();
+    }
+
+    public static string GetInfoQGISFeature(this Polygon polygon)
+    {
+        var strBuilder = new StringBuilder();
+        strBuilder.Append(
+            "{\"type\": \"Feature\",\"properties\": { \"Name\": \"test\",\"ID\": \"0\",\"area\": 57096028206669 },\"geometry\": {\"type\": \"Polygon\",\"coordinates\": [ [");
+        
+        foreach (var point in polygon.Points)
+        {
+            strBuilder.Append($"[{point.X.ToString("g", CultureInfo.InvariantCulture)}, {point.Y.ToString("g",CultureInfo.InvariantCulture)}]");
+            strBuilder.Append(", ");
+        }
+
+        strBuilder.Remove(strBuilder.Length - 2, 2);
+
+        strBuilder.Append("]]}}");
+
+        return strBuilder.ToString();
+    }
+
+    public static string GetInfoMultiPolygon(this List<Polygon> polygons)
+    {
+        var strBuilder = new StringBuilder();
+        strBuilder.Append("{\"type\": \"FeatureCollection\",\"name\": \"Kazan-25m\",\"features\": [");
+
+        foreach (var polygon in polygons)
+        {
+            strBuilder.Append(polygon.GetInfoQGISFeature());
+            strBuilder.Append(',');
+        }
+
+        strBuilder.Remove(strBuilder.Length - 1, 1);
+        strBuilder.Append("]}");
+
+        return strBuilder.ToString();
     }
 }

@@ -4,7 +4,7 @@ namespace RobotTest.Entities.Geometries;
 
 public struct Point : IEquatable<Point>
 {
-    private const double Epsilon = 1E-6;
+    private const double Epsilon = 0.01;
     public float X { get; set; }
     public float Y { get; set; }
 
