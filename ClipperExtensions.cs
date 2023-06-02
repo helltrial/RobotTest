@@ -5,6 +5,10 @@ namespace RobotTest;
 
 public static class ClipperExtensions
 {
+    public static PathsD GetPathsDFromPolygon(this Polygon polygon)
+    {
+        return new PathsD { Clipper.MakePath(polygon.PointsArray) };
+    }
     public static Polygon GetPolygonFromPathsD(this PathsD pathsD)
     {
         if (!pathsD.Any())
